@@ -109,9 +109,7 @@ const HomePage: React.FC<HomePageProps> = ({
               Get Started Free
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-            <p className="text-sm text-gray-500">
-              No signup required • Instant results
-            </p>
+            <p className="text-sm text-gray-500">Instant results</p>
           </div>
         </div>
       </section>
