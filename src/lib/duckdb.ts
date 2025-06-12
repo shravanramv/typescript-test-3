@@ -1,6 +1,6 @@
-// API client for PostgreSQL backend
+// API client for DuckDB backend (for local development)
 
-interface User {
+export interface User {
   id: string;
   email: string;
   password: string;
@@ -9,7 +9,7 @@ interface User {
   created_at: string;
 }
 
-interface JobDescription {
+export interface JobDescription {
   id: string;
   title: string;
   description: string;
@@ -19,7 +19,7 @@ interface JobDescription {
   status: "active" | "inactive";
 }
 
-interface Resume {
+export interface Resume {
   id: string;
   applicant_id: string;
   job_id: string;
@@ -29,11 +29,14 @@ interface Resume {
   uploaded_at: string;
 }
 
-class PostgreSQLManager {
+// This class assumes your backend API is now using DuckDB for local dev,
+// so the API endpoints remain the same!
+class DuckDBManager {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = "https://sharp-mclean8-x66cv.view-3.tempo-dev.app/api";
+    this.baseURL =
+      import.meta.env.VITE_API_URL || "http://localhost:3001/api";
   }
 
   private getAuthHeaders() {
@@ -182,5 +185,5 @@ class PostgreSQLManager {
   }
 }
 
-export const postgresDB = new PostgreSQLManager();
+export const duckdb = new DuckDBManager();
 export type { User, JobDescription, Resume };
