@@ -43,17 +43,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   >(null);
 
   useEffect(() => {
-    // Check for stored token on app load
-    const token = localStorage.getItem("auth_token");
-    if (token) {
-      try {
-        const userData = AuthService.verifyToken(token);
-        setUser(userData);
-      } catch (error) {
-        localStorage.removeItem("auth_token");
+    const checkToken = async () => {
+      // Check for stored token on app load
+      const token = localStorage.getItem("auth_token");
+      if (token) {
+        try {
+          const userData = await AuthService.verifyToken(token);
+          setUser(userData);
+        } catch (error) {
+          localStorage.removeItem("auth_token");
+        }
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+
+    checkToken();
   }, []);
 
   const login = async (email: string, password: string) => {
