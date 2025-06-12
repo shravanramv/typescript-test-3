@@ -193,7 +193,7 @@ const HomePage: React.FC<HomePageProps> = ({
       <footer className="w-full px-6 py-8 bg-gray-900">
         <div className="max-w-6xl mx-auto text-center">
           <p className="text-gray-400">
-            © 2024 AI Resume Scanner. Powered by advanced AI technology.
+            © 2025 AI-Based Resume Scanner - Shravan Ram.
           </p>
         </div>
       </footer>
