@@ -1,4 +1,4 @@
-// Mock DuckDB implementation for browser compatibility
+// API client for DuckDB backend
 
 interface User {
   id: string;
@@ -30,95 +30,155 @@ interface Resume {
 }
 
 class DuckDBManager {
-  private users: Map<string, User> = new Map();
-  private jobs: Map<string, JobDescription> = new Map();
-  private resumes: Map<string, Resume> = new Map();
-  private usersByEmail: Map<string, User> = new Map();
+  private baseURL: string;
 
   constructor() {
-    // Initialize in-memory storage
+    this.baseURL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+  }
+
+  private getAuthHeaders() {
+    const token = localStorage.getItem("auth_token");
+    return {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+  }
+
+  private async fetchAPI(endpoint: string, options: RequestInit = {}) {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      ...options,
+      headers: {
+        ...this.getAuthHeaders(),
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Network error" }));
+      throw new Error(error.error || "API request failed");
+    }
+
+    return response.json();
   }
 
   // User operations
   async createUser(user: Omit<User, "id" | "created_at">): Promise<string> {
-    const id = crypto.randomUUID();
-    const newUser: User = {
-      ...user,
-      id,
-      created_at: new Date().toISOString(),
-    };
-    this.users.set(id, newUser);
-    this.usersByEmail.set(user.email, newUser);
-    return id;
+    const result = await this.fetchAPI("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(user),
+    });
+    return result.id;
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
-    return this.usersByEmail.get(email) || null;
+    // This would typically be handled by the login endpoint
+    // For security reasons, we don't expose user lookup by email
+    return null;
   }
 
   async getUserById(id: string): Promise<User | null> {
-    return this.users.get(id) || null;
+    try {
+      return await this.fetchAPI(`/users/${id}`);
+    } catch {
+      return null;
+    }
   }
 
   // Job operations
   async createJob(
     job: Omit<JobDescription, "id" | "created_at">,
   ): Promise<string> {
-    const id = crypto.randomUUID();
-    const newJob: JobDescription = {
-      ...job,
-      id,
-      created_at: new Date().toISOString(),
-    };
-    this.jobs.set(id, newJob);
-    return id;
+    const result = await this.fetchAPI("/jobs", {
+      method: "POST",
+      body: JSON.stringify(job),
+    });
+    return result.id;
   }
 
   async getAllJobs(): Promise<JobDescription[]> {
-    return Array.from(this.jobs.values())
-      .filter((job) => job.status === "active")
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
+    return await this.fetchAPI("/jobs");
   }
 
   async getJobsByRecruiter(recruiterId: string): Promise<JobDescription[]> {
-    return Array.from(this.jobs.values())
-      .filter((job) => job.recruiter_id === recruiterId)
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
+    return await this.fetchAPI(`/jobs/recruiter/${recruiterId}`);
   }
 
   // Resume operations
   async saveResume(
     resume: Omit<Resume, "id" | "uploaded_at">,
   ): Promise<string> {
-    const id = crypto.randomUUID();
-    const newResume: Resume = {
-      ...resume,
-      id,
-      uploaded_at: new Date().toISOString(),
-    };
-    this.resumes.set(id, newResume);
-    return id;
+    const result = await this.fetchAPI("/resumes", {
+      method: "POST",
+      body: JSON.stringify(resume),
+    });
+    return result.id;
+  }
+
+  async saveResumeWithFile(
+    file: File,
+    jobId: string,
+    softSkillsScore: number,
+    matchScore: number,
+  ): Promise<string> {
+    const formData = new FormData();
+    formData.append("resume", file);
+    formData.append("job_id", jobId);
+    formData.append("soft_skills_score", softSkillsScore.toString());
+    formData.append("match_score", matchScore.toString());
+
+    const token = localStorage.getItem("auth_token");
+    const response = await fetch(`${this.baseURL}/resumes`, {
+      method: "POST",
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Network error" }));
+      throw new Error(error.error || "Failed to save resume");
+    }
+
+    const result = await response.json();
+    return result.id;
   }
 
   async getResumesByJob(jobId: string): Promise<Resume[]> {
-    return Array.from(this.resumes.values())
-      .filter((resume) => resume.job_id === jobId)
-      .sort((a, b) => b.soft_skills_score - a.soft_skills_score);
+    return await this.fetchAPI(`/resumes/job/${jobId}`);
   }
 
   async getResumesByApplicant(applicantId: string): Promise<Resume[]> {
-    return Array.from(this.resumes.values())
-      .filter((resume) => resume.applicant_id === applicantId)
-      .sort(
-        (a, b) =>
-          new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime(),
-      );
+    return await this.fetchAPI(`/resumes/applicant/${applicantId}`);
+  }
+
+  // AI Analysis
+  async analyzeResume(file: File, jobDescription: string) {
+    const formData = new FormData();
+    formData.append("resume", file);
+    formData.append("jobDescription", jobDescription);
+
+    const token = localStorage.getItem("auth_token");
+    const response = await fetch(`${this.baseURL}/analyze-resume`, {
+      method: "POST",
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Network error" }));
+      throw new Error(error.error || "Analysis failed");
+    }
+
+    return response.json();
   }
 }
 

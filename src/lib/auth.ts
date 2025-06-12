@@ -1,8 +1,4 @@
-import bcrypt from "bcryptjs";
-import { SignJWT, jwtVerify } from "jose";
 import { duckDB, User } from "./duckdb";
-
-const JWT_SECRET = new TextEncoder().encode("your-secret-key-here"); // In production, use environment variable
 
 export interface AuthUser {
   id: string;
@@ -12,34 +8,36 @@ export interface AuthUser {
 }
 
 export class AuthService {
+  private static baseURL =
+    import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+
   static async register(
     email: string,
     password: string,
     name: string,
     role: "recruiter" | "applicant",
   ): Promise<AuthUser> {
-    // Check if user already exists
-    const existingUser = await duckDB.getUserByEmail(email);
-    if (existingUser) {
-      throw new Error("User already exists with this email");
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const userId = await duckDB.createUser({
-      email,
-      password: hashedPassword,
-      name,
-      role,
+    const response = await fetch(`${this.baseURL}/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password, name, role }),
     });
 
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Registration failed" }));
+      throw new Error(error.error || "Registration failed");
+    }
+
+    const userData = await response.json();
     return {
-      id: userId,
-      email,
-      name,
-      role,
+      id: userData.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
     };
   }
 
@@ -47,47 +45,43 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<{ user: AuthUser; token: string }> {
-    // Get user by email
-    const user = await duckDB.getUserByEmail(email);
-    if (!user) {
-      throw new Error("Invalid email or password");
-    }
-
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      throw new Error("Invalid email or password");
-    }
-
-    // Generate JWT token
-    const token = await new SignJWT({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    })
-      .setProtectedHeader({ alg: "HS256" })
-      .setExpirationTime("24h")
-      .sign(JWT_SECRET);
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
+    const response = await fetch(`${this.baseURL}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-      token,
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Login failed" }));
+      throw new Error(error.error || "Invalid email or password");
+    }
+
+    const data = await response.json();
+    return {
+      user: data.user,
+      token: data.token,
     };
   }
 
   static async verifyToken(token: string): Promise<AuthUser> {
     try {
-      const { payload } = await jwtVerify(token, JWT_SECRET);
+      // Decode JWT token (basic implementation)
+      const payload = JSON.parse(atob(token.split(".")[1]));
+
+      // Check if token is expired
+      if (payload.exp && payload.exp < Date.now() / 1000) {
+        throw new Error("Token expired");
+      }
+
       return {
-        id: payload.id as string,
-        email: payload.email as string,
-        name: payload.name as string,
-        role: payload.role as "recruiter" | "applicant",
+        id: payload.id,
+        email: payload.email,
+        name: payload.name || "",
+        role: payload.role,
       };
     } catch (error) {
       throw new Error("Invalid token");
@@ -95,10 +89,13 @@ export class AuthService {
   }
 }
 
-// Mock Python model for soft skills ranking
+// Resume analyzer using backend API
 export class ResumeAnalyzer {
+  private static baseURL =
+    import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+
   static async analyzeResume(
-    resumeData: any,
+    file: File,
     jobDescription: string,
   ): Promise<{
     softSkillsScore: number;
@@ -107,47 +104,26 @@ export class ResumeAnalyzer {
     skills: Array<{ name: string; missing: boolean }>;
     suggestions: string[];
   }> {
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const formData = new FormData();
+    formData.append("resume", file);
+    formData.append("jobDescription", jobDescription);
 
-    // Mock analysis results
-    const keywords = [
-      { text: "Python", matched: Math.random() > 0.3 },
-      { text: "React", matched: Math.random() > 0.3 },
-      { text: "TypeScript", matched: Math.random() > 0.3 },
-      { text: "Machine Learning", matched: Math.random() > 0.5 },
-      { text: "Data Analysis", matched: Math.random() > 0.4 },
-      { text: "AWS", matched: Math.random() > 0.6 },
-      { text: "Docker", matched: Math.random() > 0.5 },
-      { text: "SQL", matched: Math.random() > 0.3 },
-    ];
+    const token = localStorage.getItem("auth_token");
+    const response = await fetch(`${this.baseURL}/analyze-resume`, {
+      method: "POST",
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
 
-    const skills = [
-      { name: "Communication", missing: Math.random() > 0.7 },
-      { name: "Leadership", missing: Math.random() > 0.6 },
-      { name: "Problem Solving", missing: Math.random() > 0.8 },
-      { name: "Teamwork", missing: Math.random() > 0.7 },
-      { name: "Adaptability", missing: Math.random() > 0.6 },
-    ];
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Analysis failed" }));
+      throw new Error(error.error || "Resume analysis failed");
+    }
 
-    const matchedKeywords = keywords.filter((k) => k.matched).length;
-    const matchScore = Math.round((matchedKeywords / keywords.length) * 100);
-    const softSkillsScore = Math.round(Math.random() * 40 + 60); // 60-100
-
-    const suggestions = [
-      "Highlight your leadership experience with specific examples",
-      "Add quantifiable achievements to demonstrate impact",
-      "Include more technical keywords from the job description",
-      "Emphasize your problem-solving abilities with concrete examples",
-      "Add soft skills that align with the company culture",
-    ];
-
-    return {
-      softSkillsScore,
-      matchScore,
-      keywords,
-      skills,
-      suggestions,
-    };
+    return response.json();
   }
 }
