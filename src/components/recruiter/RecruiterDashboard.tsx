@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "../../contexts/AuthContext";
-import { duckDB, JobDescription, Resume } from "../../lib/duckdb";
+import { postgresDB, JobDescription, Resume } from "../../lib/duckdb";
 import { Plus, Briefcase, Users, Eye, LogOut } from "lucide-react";
 import JobForm from "./JobForm";
 import ResumeList from "./ResumeList";
@@ -24,7 +24,7 @@ const RecruiterDashboard: React.FC = () => {
   const loadJobs = async () => {
     if (!user) return;
     try {
-      const jobList = await duckDB.getJobsByRecruiter(user.id);
+      const jobList = await postgresDB.getJobsByRecruiter(user.id);
       setJobs(jobList);
     } catch (error) {
       console.error("Error loading jobs:", error);
@@ -35,7 +35,7 @@ const RecruiterDashboard: React.FC = () => {
 
   const loadResumes = async (jobId: string) => {
     try {
-      const resumeList = await duckDB.getResumesByJob(jobId);
+      const resumeList = await postgresDB.getResumesByJob(jobId);
       setResumes(resumeList);
     } catch (error) {
       console.error("Error loading resumes:", error);

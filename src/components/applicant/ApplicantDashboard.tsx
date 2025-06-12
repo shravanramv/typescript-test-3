@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "../../contexts/AuthContext";
-import { duckDB, JobDescription, Resume } from "../../lib/duckdb";
+import { postgresDB, JobDescription, Resume } from "../../lib/duckdb";
 import { User, Briefcase, FileText, LogOut, Search } from "lucide-react";
 import JobList from "./JobList";
 import ApplicationHistory from "./ApplicationHistory";
@@ -22,8 +22,8 @@ const ApplicantDashboard: React.FC = () => {
     if (!user) return;
     try {
       const [jobList, applicationList] = await Promise.all([
-        duckDB.getAllJobs(),
-        duckDB.getResumesByApplicant(user.id),
+        postgresDB.getAllJobs(),
+        postgresDB.getResumesByApplicant(user.id),
       ]);
       setJobs(jobList);
       setApplications(applicationList);

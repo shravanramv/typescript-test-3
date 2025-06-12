@@ -1,16 +1,16 @@
-const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const DuckDBManager = require("./database");
+import express from "express";
+import cors from "cors";
+import multer from "multer";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import PostgreSQLManager from "./database.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-here";
 
 // Initialize database
-const db = new DuckDBManager();
+const db = new PostgreSQLManager();
 
 // Middleware
 app.use(cors());

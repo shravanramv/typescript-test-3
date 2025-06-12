@@ -1,55 +1,68 @@
-const Database = require("duckdb").Database;
-const path = require("path");
+import pkg from "pg";
+const { Pool } = pkg;
+import { randomUUID } from "crypto";
 
-class DuckDBManager {
+class PostgreSQLManager {
   constructor() {
-    this.db = null;
-    this.connection = null;
+    this.pool = null;
     this.init();
   }
 
   async init() {
     try {
-      // Create database file in server directory
-      const dbPath = path.join(__dirname, "resume_scanner.db");
-      this.db = new Database(dbPath);
-      this.connection = this.db.connect();
+      // Initialize PostgreSQL connection pool
+      this.pool = new Pool({
+        connectionString:
+          process.env.DATABASE_URL ||
+          "postgresql://postgres:password@localhost:5432/resume_scanner",
+        host: process.env.DB_HOST || "localhost",
+        port: process.env.DB_PORT || 5432,
+        database: process.env.DB_NAME || "resume_scanner",
+        user: process.env.DB_USER || "postgres",
+        password: process.env.DB_PASSWORD || "password",
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      });
 
       await this.createTables();
-      console.log("DuckDB initialized successfully");
+      console.log("PostgreSQL initialized successfully");
     } catch (error) {
-      console.error("Failed to initialize DuckDB:", error);
-      throw error;
+      console.error("Failed to initialize PostgreSQL:", error);
+      // Don't throw error to allow server to start without DB
+      console.log("Server will continue without database connection");
     }
   }
 
   async createTables() {
+    if (!this.pool) return;
+
     const queries = [
       `CREATE TABLE IF NOT EXISTS users (
-        id VARCHAR PRIMARY KEY,
-        email VARCHAR UNIQUE NOT NULL,
-        password VARCHAR NOT NULL,
-        name VARCHAR NOT NULL,
-        role VARCHAR CHECK (role IN ('recruiter', 'applicant')) NOT NULL,
+        id VARCHAR(255) PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        role VARCHAR(50) CHECK (role IN ('recruiter', 'applicant')) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
 
       `CREATE TABLE IF NOT EXISTS job_descriptions (
-        id VARCHAR PRIMARY KEY,
-        title VARCHAR NOT NULL,
+        id VARCHAR(255) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
         description TEXT NOT NULL,
         requirements TEXT NOT NULL,
-        recruiter_id VARCHAR NOT NULL,
-        status VARCHAR CHECK (status IN ('active', 'inactive')) DEFAULT 'active',
+        recruiter_id VARCHAR(255) NOT NULL,
+        status VARCHAR(50) CHECK (status IN ('active', 'inactive')) DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (recruiter_id) REFERENCES users(id)
       )`,
 
       `CREATE TABLE IF NOT EXISTS resumes (
-        id VARCHAR PRIMARY KEY,
-        applicant_id VARCHAR NOT NULL,
-        job_id VARCHAR NOT NULL,
-        resume_data JSON NOT NULL,
+        id VARCHAR(255) PRIMARY KEY,
+        applicant_id VARCHAR(255) NOT NULL,
+        job_id VARCHAR(255) NOT NULL,
+        resume_data JSONB NOT NULL,
         soft_skills_score INTEGER NOT NULL,
         match_score INTEGER NOT NULL,
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -59,40 +72,52 @@ class DuckDBManager {
     ];
 
     for (const query of queries) {
-      await this.executeQuery(query);
+      try {
+        await this.executeQuery(query);
+      } catch (error) {
+        console.error("Error creating table:", error);
+      }
     }
   }
 
-  executeQuery(query, params = []) {
-    return new Promise((resolve, reject) => {
-      this.connection.all(query, ...params, (err, result) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(result);
-        }
-      });
-    });
+  async executeQuery(query, params = []) {
+    if (!this.pool) {
+      throw new Error("Database not connected");
+    }
+
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(query, params);
+      return result.rows;
+    } finally {
+      client.release();
+    }
   }
 
   // User operations
   async createUser(userData) {
     const { email, password, name, role } = userData;
-    const id = require("crypto").randomUUID();
+    const id = randomUUID();
 
-    const query = `INSERT INTO users (id, email, password, name, role) VALUES (?, ?, ?, ?, ?)`;
-    await this.executeQuery(query, [id, email, password, name, role]);
-    return id;
+    const query = `INSERT INTO users (id, email, password, name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id`;
+    const result = await this.executeQuery(query, [
+      id,
+      email,
+      password,
+      name,
+      role,
+    ]);
+    return result[0].id;
   }
 
   async getUserByEmail(email) {
-    const query = `SELECT * FROM users WHERE email = ?`;
+    const query = `SELECT * FROM users WHERE email = $1`;
     const result = await this.executeQuery(query, [email]);
     return result.length > 0 ? result[0] : null;
   }
 
   async getUserById(id) {
-    const query = `SELECT * FROM users WHERE id = ?`;
+    const query = `SELECT * FROM users WHERE id = $1`;
     const result = await this.executeQuery(query, [id]);
     return result.length > 0 ? result[0] : null;
   }
@@ -100,10 +125,10 @@ class DuckDBManager {
   // Job operations
   async createJob(jobData) {
     const { title, description, requirements, recruiter_id, status } = jobData;
-    const id = require("crypto").randomUUID();
+    const id = randomUUID();
 
-    const query = `INSERT INTO job_descriptions (id, title, description, requirements, recruiter_id, status) VALUES (?, ?, ?, ?, ?, ?)`;
-    await this.executeQuery(query, [
+    const query = `INSERT INTO job_descriptions (id, title, description, requirements, recruiter_id, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`;
+    const result = await this.executeQuery(query, [
       id,
       title,
       description,
@@ -111,7 +136,7 @@ class DuckDBManager {
       recruiter_id,
       status,
     ]);
-    return id;
+    return result[0].id;
   }
 
   async getAllJobs() {
@@ -120,7 +145,7 @@ class DuckDBManager {
   }
 
   async getJobsByRecruiter(recruiterId) {
-    const query = `SELECT * FROM job_descriptions WHERE recruiter_id = ? ORDER BY created_at DESC`;
+    const query = `SELECT * FROM job_descriptions WHERE recruiter_id = $1 ORDER BY created_at DESC`;
     return await this.executeQuery(query, [recruiterId]);
   }
 
@@ -133,10 +158,10 @@ class DuckDBManager {
       soft_skills_score,
       match_score,
     } = resumeData;
-    const id = require("crypto").randomUUID();
+    const id = randomUUID();
 
-    const query = `INSERT INTO resumes (id, applicant_id, job_id, resume_data, soft_skills_score, match_score) VALUES (?, ?, ?, ?, ?, ?)`;
-    await this.executeQuery(query, [
+    const query = `INSERT INTO resumes (id, applicant_id, job_id, resume_data, soft_skills_score, match_score) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`;
+    const result = await this.executeQuery(query, [
       id,
       applicant_id,
       job_id,
@@ -144,7 +169,7 @@ class DuckDBManager {
       soft_skills_score,
       match_score,
     ]);
-    return id;
+    return result[0].id;
   }
 
   async getResumesByJob(jobId) {
@@ -153,13 +178,16 @@ class DuckDBManager {
       FROM resumes r 
       JOIN users u ON r.applicant_id = u.id 
       JOIN job_descriptions j ON r.job_id = j.id 
-      WHERE r.job_id = ? 
+      WHERE r.job_id = $1 
       ORDER BY r.soft_skills_score DESC
     `;
     const result = await this.executeQuery(query, [jobId]);
     return result.map((row) => ({
       ...row,
-      resume_data: JSON.parse(row.resume_data),
+      resume_data:
+        typeof row.resume_data === "string"
+          ? JSON.parse(row.resume_data)
+          : row.resume_data,
     }));
   }
 
@@ -168,24 +196,24 @@ class DuckDBManager {
       SELECT r.*, j.title as job_title 
       FROM resumes r 
       JOIN job_descriptions j ON r.job_id = j.id 
-      WHERE r.applicant_id = ? 
+      WHERE r.applicant_id = $1 
       ORDER BY r.uploaded_at DESC
     `;
     const result = await this.executeQuery(query, [applicantId]);
     return result.map((row) => ({
       ...row,
-      resume_data: JSON.parse(row.resume_data),
+      resume_data:
+        typeof row.resume_data === "string"
+          ? JSON.parse(row.resume_data)
+          : row.resume_data,
     }));
   }
 
-  close() {
-    if (this.connection) {
-      this.connection.close();
-    }
-    if (this.db) {
-      this.db.close();
+  async close() {
+    if (this.pool) {
+      await this.pool.end();
     }
   }
 }
 
-module.exports = DuckDBManager;
+export default PostgreSQLManager;

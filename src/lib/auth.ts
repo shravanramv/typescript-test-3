@@ -1,4 +1,4 @@
-import { duckDB, User } from "./duckdb";
+import { postgresDB, User } from "./duckdb";
 
 export interface AuthUser {
   id: string;

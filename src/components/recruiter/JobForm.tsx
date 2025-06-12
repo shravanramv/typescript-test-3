@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "../../contexts/AuthContext";
-import { duckDB } from "../../lib/duckdb";
+import { postgresDB } from "../../lib/duckdb";
 import { Briefcase, FileText, List } from "lucide-react";
 
 interface JobFormProps {
@@ -33,7 +33,7 @@ const JobForm: React.FC<JobFormProps> = ({ onJobCreated }) => {
     setSuccess("");
 
     try {
-      await duckDB.createJob({
+      await postgresDB.createJob({
         title: formData.title,
         description: formData.description,
         requirements: formData.requirements,
