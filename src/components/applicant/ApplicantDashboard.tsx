@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "../../contexts/AuthContext";
-import { postgresDB, JobDescription, Resume } from "../../lib/sqlite";
+import { sqliteDB, JobDescription, Resume } from "../../lib/sqlite"; // ✅ changed from postgresDB to sqliteDB
 import { User, Briefcase, FileText, LogOut, Search } from "lucide-react";
 import JobList from "./JobList";
 import ApplicationHistory from "./ApplicationHistory";
@@ -22,8 +22,8 @@ const ApplicantDashboard: React.FC = () => {
     if (!user) return;
     try {
       const [jobList, applicationList] = await Promise.all([
-        postgresDB.getAllJobs(),
-        postgresDB.getResumesByApplicant(user.id),
+        sqliteDB.getAllJobs(), // ✅ changed from postgresDB to sqliteDB
+        sqliteDB.getResumesByApplicant(user.id), // ✅ same here
       ]);
       setJobs(jobList);
       setApplications(applicationList);
