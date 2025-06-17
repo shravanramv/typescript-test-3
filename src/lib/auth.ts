@@ -1,10 +1,25 @@
-import { postgresDB, User } from "./duckdb";
+// Remove the problematic import since we're using API calls
+// import { postgresDB, User } from "./sqlite";
 
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
   role: "recruiter" | "applicant";
+}
+
+// Add interface that matches our SQLite database structure
+export interface DatabaseUser {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  company_name?: string; // For recruiters
+  company_website?: string; // For recruiters
+  resume_url?: string; // For applicants
+  created_at: string;
+  updated_at: string;
 }
 
 export class AuthService {
@@ -14,15 +29,29 @@ export class AuthService {
   static async register(
     email: string,
     password: string,
-    name: string,
+    firstName: string,
+    lastName: string,
     role: "recruiter" | "applicant",
+    additionalData?: {
+      phone?: string;
+      companyName?: string;
+      companyWebsite?: string;
+      resumeUrl?: string;
+    }
   ): Promise<AuthUser> {
     const response = await fetch(`${this.baseURL}/auth/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, password, name, role }),
+      body: JSON.stringify({
+        email,
+        password,
+        firstName,
+        lastName,
+        userType: role,
+        ...additionalData
+      }),
     });
 
     if (!response.ok) {
@@ -32,25 +61,26 @@ export class AuthService {
       throw new Error(error.error || "Registration failed");
     }
 
-    const userData = await response.json();
+    const data = await response.json();
     return {
-      id: userData.id,
-      email: userData.email,
-      name: userData.name,
-      role: userData.role,
+      id: data.user.id.toString(),
+      email: data.user.email,
+      name: `${data.user.first_name} ${data.user.last_name}`,
+      role: role,
     };
   }
 
   static async login(
     email: string,
     password: string,
-  ): Promise<{ user: AuthUser; token: string }> {
+    userType: "recruiter" | "applicant"
+  ): Promise<{ user: AuthUser; sessionId: string }> {
     const response = await fetch(`${this.baseURL}/auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, userType }),
     });
 
     if (!response.ok) {
@@ -62,30 +92,56 @@ export class AuthService {
 
     const data = await response.json();
     return {
-      user: data.user,
-      token: data.token,
+      user: {
+        id: data.user.id.toString(),
+        email: data.user.email,
+        name: `${data.user.first_name} ${data.user.last_name}`,
+        role: userType,
+      },
+      sessionId: data.sessionId,
     };
   }
 
-  static async verifyToken(token: string): Promise<AuthUser> {
-    try {
-      // Decode JWT token (basic implementation)
-      const payload = JSON.parse(atob(token.split(".")[1]));
+  static async verifySession(sessionId: string, userType: "recruiter" | "applicant"): Promise<AuthUser> {
+    const response = await fetch(`${this.baseURL}/auth/verify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sessionId, userType }),
+    });
 
-      // Check if token is expired
-      if (payload.exp && payload.exp < Date.now() / 1000) {
-        throw new Error("Token expired");
-      }
-
-      return {
-        id: payload.id,
-        email: payload.email,
-        name: payload.name || "",
-        role: payload.role,
-      };
-    } catch (error) {
-      throw new Error("Invalid token");
+    if (!response.ok) {
+      throw new Error("Session invalid");
     }
+
+    const data = await response.json();
+    return {
+      id: data.user.id.toString(),
+      email: data.user.email,
+      name: `${data.user.first_name} ${data.user.last_name}`,
+      role: userType,
+    };
+  }
+
+  static async logout(sessionId: string): Promise<void> {
+    await fetch(`${this.baseURL}/auth/logout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+  }
+
+  // Helper method to convert database user to auth user
+  static convertDatabaseUserToAuthUser(dbUser: DatabaseUser, role: "recruiter" | "applicant"): AuthUser {
+    return {
+      id: dbUser.id.toString(),
+      email: dbUser.email,
+      name: `${dbUser.first_name} ${dbUser.last_name}`,
+      role: role,
+    };
   }
 }
 
@@ -108,11 +164,11 @@ export class ResumeAnalyzer {
     formData.append("resume", file);
     formData.append("jobDescription", jobDescription);
 
-    const token = localStorage.getItem("auth_token");
+    const sessionId = localStorage.getItem("sessionId");
     const response = await fetch(`${this.baseURL}/analyze-resume`, {
       method: "POST",
       headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
+        ...(sessionId && { Authorization: `Bearer ${sessionId}` }),
       },
       body: formData,
     });
