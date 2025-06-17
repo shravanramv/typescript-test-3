@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "../../contexts/AuthContext";
-import { postgresDB, JobDescription, Resume } from "../../lib/duckdb";
+import { postgresDB, JobDescription, Resume } from "../../lib/sqlite";
 import { Plus, Briefcase, Users, Eye, LogOut } from "lucide-react";
 import JobForm from "./JobForm";
 import ResumeList from "./ResumeList";

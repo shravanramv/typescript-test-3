@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "../../contexts/AuthContext";
-import { postgresDB, JobDescription } from "../../lib/duckdb";
+import { postgresDB, JobDescription } from "../../lib/sqlite";
 import { ResumeAnalyzer } from "../../lib/auth";
 import { Upload, FileText, X, Loader2 } from "lucide-react";
 import ProcessingStatus from "../ProcessingStatus";

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "../../contexts/AuthContext";
-import { postgresDB } from "../../lib/duckdb";
+import { postgresDB } from "../../lib/sqlite";
 import { Briefcase, FileText, List } from "lucide-react";
 
 interface JobFormProps {

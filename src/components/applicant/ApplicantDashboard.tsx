@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "../../contexts/AuthContext";
-import { postgresDB, JobDescription, Resume } from "../../lib/duckdb";
+import { postgresDB, JobDescription, Resume } from "../../lib/sqlite";
 import { User, Briefcase, FileText, LogOut, Search } from "lucide-react";
 import JobList from "./JobList";
 import ApplicationHistory from "./ApplicationHistory";
